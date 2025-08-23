@@ -12,7 +12,7 @@ def inverse_kinematics(theta_p_deg, theta_r_deg):
         list or None: 成功时返回特定解 [alpha1_deg, alpha2_deg]，失败时返回 None.
     """
     # 直接使用类中定义的参数
-    l1, l2, l3, l4,l5 ,r ,h3 ,h4 =  44, 22.5, 159.83, 207.87, 12 ,30 ,155 ,203
+    l1, l2, l3, l4, l5, r, h3, h4 =  44, 22.5, 159.83, 207.87, 12 ,30 ,155 ,203
     offest_angle1,offest_angle2 = 9.26/180. * math.pi, -9.34/180. * math.pi
     theta1, theta2 = math.radians(theta_p_deg), math.radians(theta_r_deg)
     c1, s1 = math.cos(theta1), math.sin(theta1)
@@ -58,7 +58,7 @@ def inverse_kinematics(theta_p_deg, theta_r_deg):
         t_alpha2 = (-b2 + math.sqrt(discriminant2)) / (2 * a2)
         alpha2_sol_deg = math.degrees(2 * math.atan(t_alpha2))
 
-        return [alpha1_sol_deg, alpha2_sol_deg]
+        return [alpha1_sol_deg-offest_angle1, alpha2_sol_deg-offest_angle2]
 
     except (ValueError, ZeroDivisionError):
         return None
