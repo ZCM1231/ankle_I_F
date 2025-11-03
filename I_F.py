@@ -356,21 +356,62 @@ def forward_kinematics_constraints(theta_p, theta_r, alpha1, alpha2):
 
 def compute_jacobian(theta_p, theta_r, alpha1, alpha2):
     """
-    计算约束方程的雅可比矩阵
+    计算约束方程的雅可比矩阵（解析导数方法）
     """
-    # 数值微分计算雅可比矩阵
-    h = 1e-8  # 微小增量
-    F0 = forward_kinematics_constraints(theta_p, theta_r, alpha1, alpha2)
+    # 机构参数
+    l1, l2, l3, l4, l5, r, h3, h4 = 44, 27, 97.82, 145.88, 12 ,30 ,90 ,138
+    offest_angle1,offest_angle2 = 0.2630290095, -0.26353345762
     
-    # ∂F/∂θₚ
-    F_dp = forward_kinematics_constraints(theta_p + h, theta_r, alpha1, alpha2)
-    dF_dp = (F_dp - F0) / h
+    # 角度转换
+    c1, s1 = math.cos(theta_p), math.sin(theta_p)  # theta1 = pitch
+    c2, s2 = math.cos(theta_r), math.sin(theta_r)  # theta2 = roll
+    ca1, sa1 = math.cos(alpha1 + offest_angle1), math.sin(alpha1 + offest_angle1)
+    ca2, sa2 = math.cos(alpha2 + offest_angle2), math.sin(alpha2 + offest_angle2)
     
-    # ∂F/∂θᵣ
-    F_dr = forward_kinematics_constraints(theta_p, theta_r + h, alpha1, alpha2)
-    dF_dr = (F_dr - F0) / h
+    # 约束方程 D（对应 constraint1，AB连杆约束）
+    # 参考用户提供的公式形式：D = (term1)**2 + (term2)**2 + (term3)**2 - l3**2
+    term1_D = (-l1*c1 + l2*s1*s2 - l5*s1*c2 + l1*ca1)
+    term2_D = (l2*c2 + l5*s2 - l2)
+    term3_D = (l1*s1 + l2*c1*s2 - l5*c1*c2 - l1*sa1 - l3)
     
-    J = np.column_stack([dF_dp, dF_dr])
+    # ∂D/∂θ₁ (∂D/∂theta_p)
+    # 对term1_D求导：∂(term1_D)/∂θ₁ = l1*s1 + l2*c1*s2 - l5*c1*c2
+    # 对term3_D求导：∂(term3_D)/∂θ₁ = l1*c1 - l2*s1*s2 + l5*s1*c2
+    dD_d_theta1 = 2*term1_D*(l1*s1 + l2*c1*s2 - l5*c1*c2) + \
+                  2*term3_D*(l1*c1 - l2*s1*s2 + l5*s1*c2)
+    
+    # ∂D/∂θ₂ (∂D/∂theta_r)
+    # 对term1_D求导：∂(term1_D)/∂θ₂ = l2*s1*c2 + l5*s1*s2
+    # 对term2_D求导：∂(term2_D)/∂θ₂ = -l2*s2 + l5*c2
+    # 对term3_D求导：∂(term3_D)/∂θ₂ = l2*c1*c2 + l5*c1*s2
+    dD_d_theta2 = 2*term1_D*(l2*s1*c2 + l5*s1*s2) + \
+                  2*term2_D*(-l2*s2 + l5*c2) + \
+                  2*term3_D*(l2*c1*c2 + l5*c1*s2)
+    
+    # 约束方程 H（对应 constraint2，CD连杆约束）
+    # 参考用户提供的公式形式：H = (term1)**2 + (term2)**2 + (term3)**2 - l4**2
+    term1_H = (-l1*c1 - l2*s1*s2 - l5*s1*c2 + l1*ca2)
+    term2_H = (-l2*c2 + l5*s2 + l2)
+    term3_H = (l1*s1 - l2*c1*s2 - l5*c1*c2 - l1*sa2 - l4)
+    
+    # ∂H/∂θ₁ (∂H/∂theta_p)
+    # 对term1_H求导：∂(term1_H)/∂θ₁ = l1*s1 - l2*c1*s2 - l5*c1*c2
+    # 对term3_H求导：∂(term3_H)/∂θ₁ = l1*c1 + l2*s1*s2 + l5*s1*c2
+    dH_d_theta1 = 2*term1_H*(l1*s1 - l2*c1*s2 - l5*c1*c2) + \
+                  2*term3_H*(l1*c1 + l2*s1*s2 + l5*s1*c2)
+    
+    # ∂H/∂θ₂ (∂H/∂theta_r)
+    # 对term1_H求导：∂(term1_H)/∂θ₂ = -l2*s1*c2 + l5*s1*s2
+    # 对term2_H求导：∂(term2_H)/∂θ₂ = l2*s2 + l5*c2
+    # 对term3_H求导：∂(term3_H)/∂θ₂ = -l2*c1*c2 + l5*c1*s2
+    dH_d_theta2 = 2*term1_H*(-l2*s1*c2 + l5*s1*s2) + \
+                  2*term2_H*(l2*s2 + l5*c2) + \
+                  2*term3_H*(-l2*c1*c2 + l5*c1*s2)
+    
+    # 组装雅可比矩阵
+    J = np.array([[dD_d_theta1, dD_d_theta2], 
+                  [dH_d_theta1, dH_d_theta2]])
+    
     return J
 
 def compute_kinematic_jacobian(theta_p, theta_r):
@@ -492,7 +533,7 @@ def forward_kinematics_newton(alpha1_deg, alpha2_deg, initial_guess=None, max_it
 
 if __name__ == "__main__":
     # 计算零位姿态下的运动学雅可比矩阵
-    J = compute_kinematic_jacobian(0, 0)
+    J = compute_kinematic_jacobian(-0.2, 0)
     print("零位姿态下的运动学雅可比矩阵:")
     print(J)
     if J is not None:
